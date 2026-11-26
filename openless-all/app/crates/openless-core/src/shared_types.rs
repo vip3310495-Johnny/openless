@@ -574,7 +574,8 @@ pub struct UserPreferences {
     /// Empty = translation mode off (Shift combos are inert). The frontend
     /// picks from the built-in language list; the backend just splices the
     /// native name into the prompt. See issue #4.
-    #[serde(default)]
+    /// Taiwan build: defaults to English so the keyboard's voice-translate button works out of the box.
+    #[serde(default = "default_translation_target_language")]
     pub translation_target_language: String,
     /// Chinese output script preference (not exposed as a UI switch):
     /// - Simplified: prefer simplified for Chinese output
@@ -1949,6 +1950,10 @@ pub(crate) fn default_coding_agent_panel_hotkey() -> Option<ShortcutBinding> {
     })
 }
 
+fn default_translation_target_language() -> String {
+    "English".to_string()
+}
+
 fn default_translation_hotkey() -> ShortcutBinding {
     ShortcutBinding {
         primary: "Shift".into(),
@@ -2066,7 +2071,7 @@ impl Default for UserPreferences {
             windows_sendinput_insertion_only: false,
             windows_show_openless_in_keyboard_list: true,
             working_languages: default_working_languages(),
-            translation_target_language: String::new(),
+            translation_target_language: default_translation_target_language(),
             chinese_script_preference: ChineseScriptPreference::Auto,
             output_language_preference: OutputLanguagePreference::Auto,
             qa_hotkey: default_qa_hotkey(),

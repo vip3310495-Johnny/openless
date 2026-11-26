@@ -19,20 +19,20 @@ fn github_url(url: &Url) -> bool {
     url.host_str() == Some("github.com")
         && url
             .path()
-            .starts_with("/Open-Less/openless/releases/download/")
+            .starts_with("/vip3310495-Johnny/openless/releases/download/")
 }
 
 fn legacy_github_mirror_url(url: &Url) -> bool {
     url.host_str() == Some("fastgit.cc")
         && url
             .path()
-            .starts_with("/https://github.com/Open-Less/openless/releases/")
+            .starts_with("/https://github.com/vip3310495-Johnny/openless/releases/")
 }
 
 pub(crate) fn allowed_update_download_url(url: &Url) -> bool {
     safe_https(url)
         && (url.host_str() == Some("github.com")
-            && url.path().starts_with("/Open-Less/openless/releases/")
+            && url.path().starts_with("/vip3310495-Johnny/openless/releases/")
             || legacy_github_mirror_url(url)
             || url.host_str() == Some("dl.aeoform.com") && url.path().starts_with("/releases/"))
 }
@@ -49,8 +49,8 @@ fn allowed_request(url: &Url, redirected: bool) -> bool {
         return false;
     }
     match url.host_str() {
-        Some("github.com") => url.path().starts_with("/Open-Less/openless/releases"),
-        Some("api.github.com") => url.path().starts_with("/repos/Open-Less/openless/releases"),
+        Some("github.com") => url.path().starts_with("/vip3310495-Johnny/openless/releases"),
+        Some("api.github.com") => url.path().starts_with("/repos/vip3310495-Johnny/openless/releases"),
         Some("fastgit.cc") => legacy_github_mirror_url(url),
         Some("dl.aeoform.com") => {
             url.path().starts_with("/releases/") || url.path().starts_with("/updates/")
@@ -318,7 +318,7 @@ fn api_artifact<'a>(
         })?;
     let artifact_url = artifact["browser_download_url"].as_str()?;
     let signature_url = signature["browser_download_url"].as_str()?;
-    let expected = format!("/Open-Less/openless/releases/download/{tag}/");
+    let expected = format!("/vip3310495-Johnny/openless/releases/download/{tag}/");
     for (value, filename) in [
         (artifact_url, name),
         (signature_url, signature["name"].as_str()?),
@@ -356,9 +356,9 @@ async fn api_manifest(
     candidate_seen: &KnownCandidate,
 ) -> Result<Value, ApiDiscoveryError> {
     let endpoint = match channel {
-        UpdateChannel::Stable => "https://api.github.com/repos/Open-Less/openless/releases/latest",
+        UpdateChannel::Stable => "https://api.github.com/repos/vip3310495-Johnny/openless/releases/latest",
         UpdateChannel::Beta => {
-            "https://api.github.com/repos/Open-Less/openless/releases?per_page=30"
+            "https://api.github.com/repos/vip3310495-Johnny/openless/releases?per_page=30"
         }
     };
     let mut value: Value = serde_json::from_str(&text(endpoint, API_METADATA_LIMIT).await?)
@@ -368,7 +368,7 @@ async fn api_manifest(
     {
         value = serde_json::from_str(
             &text(
-                "https://api.github.com/repos/Open-Less/openless/releases?per_page=30",
+                "https://api.github.com/repos/vip3310495-Johnny/openless/releases?per_page=30",
                 API_METADATA_LIMIT,
             )
             .await?,
@@ -405,7 +405,7 @@ async fn api_manifest(
 }
 
 fn web_artifact(page: &str, tag: &str, arch: &str) -> Option<(String, String, String)> {
-    let prefix = format!("/Open-Less/openless/releases/download/{tag}/");
+    let prefix = format!("/vip3310495-Johnny/openless/releases/download/{tag}/");
     let paths: Vec<_> = page
         .split("href=\"")
         .skip(1)
@@ -446,7 +446,7 @@ where
     for tag in super::github_feed_tags(feed, channel).into_iter().take(3) {
         let version = tag_version(tag, channel).ok_or("invalid public release tag")?;
         let page = match fetch(
-            format!("https://github.com/Open-Less/openless/releases/expanded_assets/{tag}"),
+            format!("https://github.com/vip3310495-Johnny/openless/releases/expanded_assets/{tag}"),
             METADATA_LIMIT,
         )
         .await
@@ -475,7 +475,7 @@ where
             android_signature_version(signature.trim(), &name, &version.to_string(), arch)
                 .map_err(|error| candidate_error(&full_version, &error))?;
         return Ok(
-            json!({"version":version,"url":url,"signature":signature.trim(),"notes":format!("https://github.com/Open-Less/openless/releases/tag/{tag}")}),
+            json!({"version":version,"url":url,"signature":signature.trim(),"notes":format!("https://github.com/vip3310495-Johnny/openless/releases/tag/{tag}")}),
         );
     }
     Err("public releases have no matching signed APK in the newest channel tags".into())
@@ -487,7 +487,7 @@ async fn web_manifest(
     candidate_seen: &KnownCandidate,
 ) -> Result<Value, String> {
     let feed = text(
-        "https://github.com/Open-Less/openless/releases.atom",
+        "https://github.com/vip3310495-Johnny/openless/releases.atom",
         METADATA_LIMIT,
     )
     .await
@@ -575,8 +575,8 @@ mod tests {
         ] {
             let name = format!("OpenLess_2.0.2-Beta.6+build.20261109-test_{abi}.apk");
             let release = json!({"tag_name":tag,"assets":[
-                {"name":name,"browser_download_url":format!("https://github.com/Open-Less/openless/releases/download/{tag}/{name}"),"size":20},
-                {"name":format!("{name}.sig"),"browser_download_url":format!("https://github.com/Open-Less/openless/releases/download/{tag}/{name}.sig")}
+                {"name":name,"browser_download_url":format!("https://github.com/vip3310495-Johnny/openless/releases/download/{tag}/{name}"),"size":20},
+                {"name":format!("{name}.sig"),"browser_download_url":format!("https://github.com/vip3310495-Johnny/openless/releases/download/{tag}/{name}.sig")}
             ]});
             let (actual, _, _, size) = api_artifact(&release, arch).unwrap();
             assert_eq!(actual, name);
@@ -595,12 +595,12 @@ mod tests {
                 arch
             )
             .is_err());
-            let page=format!("<a href=\"/Open-Less/openless/releases/download/{tag}/{name}\"><a href=\"/Open-Less/openless/releases/download/{tag}/{name}.sig\">");
+            let page=format!("<a href=\"/vip3310495-Johnny/openless/releases/download/{tag}/{name}\"><a href=\"/vip3310495-Johnny/openless/releases/download/{tag}/{name}.sig\">");
             assert_eq!(web_artifact(&page, tag, arch).unwrap().0, name);
             assert!(web_artifact(&page.replace(".apk.sig", ".apk.unsigned"), tag, arch).is_none());
             let mut indexed = release.clone();
             indexed["assets"][1] = json!({"name":super::super::signature_index::NAME,
-                "browser_download_url":format!("https://github.com/Open-Less/openless/releases/download/{tag}/updater-signatures.json")});
+                "browser_download_url":format!("https://github.com/vip3310495-Johnny/openless/releases/download/{tag}/updater-signatures.json")});
             assert!(api_artifact(&indexed, arch)
                 .unwrap()
                 .2
@@ -648,10 +648,10 @@ mod tests {
     #[test]
     fn request_origins_are_fixed_and_redirects_cannot_escape_https() {
         for value in [
-            "http://github.com/Open-Less/openless/releases/download/tag/file.apk",
+            "http://github.com/vip3310495-Johnny/openless/releases/download/tag/file.apk",
             "https://attacker.invalid/releases/file.apk",
-            "https://user:password@github.com/Open-Less/openless/releases/download/tag/file.apk",
-            "https://github.com:444/Open-Less/openless/releases/download/tag/file.apk",
+            "https://user:password@github.com/vip3310495-Johnny/openless/releases/download/tag/file.apk",
+            "https://github.com:444/vip3310495-Johnny/openless/releases/download/tag/file.apk",
             "https://github.com/other/repo/releases/download/tag/file.apk",
         ] {
             let url = Url::parse(value).unwrap();
@@ -742,8 +742,8 @@ mod tests {
             .unwrap();
         let name = format!("OpenLess_{version}+build.test_{abi}.apk");
         json!({"tag_name":tag,"draft":draft,"prerelease":true,"assets":[
-            {"name":name,"browser_download_url":format!("https://github.com/Open-Less/openless/releases/download/{tag}/{name}")},
-            {"name":format!("{name}.sig"),"browser_download_url":format!("https://github.com/Open-Less/openless/releases/download/{tag}/{name}.sig")}
+            {"name":name,"browser_download_url":format!("https://github.com/vip3310495-Johnny/openless/releases/download/{tag}/{name}")},
+            {"name":format!("{name}.sig"),"browser_download_url":format!("https://github.com/vip3310495-Johnny/openless/releases/download/{tag}/{name}.sig")}
         ]})
     }
     fn page_fixture(tag: &str, abi: &str) -> (String, String) {
@@ -753,10 +753,10 @@ mod tests {
             .strip_suffix("-tauri")
             .unwrap();
         let name = format!("OpenLess_{version}+build.test_{abi}.apk");
-        (format!("<a href=\"/Open-Less/openless/releases/download/{tag}/{name}\"><a href=\"/Open-Less/openless/releases/download/{tag}/{name}.sig\">"),name)
+        (format!("<a href=\"/vip3310495-Johnny/openless/releases/download/{tag}/{name}\"><a href=\"/vip3310495-Johnny/openless/releases/download/{tag}/{name}.sig\">"),name)
     }
     fn two_beta_feed() -> &'static str {
-        r#"<entry><link href="https://github.com/Open-Less/openless/releases/tag/v2.0.2-Beta.4-tauri"/></entry><entry><link href="https://github.com/Open-Less/openless/releases/tag/v2.0.2-Beta.5-tauri"/></entry>"#
+        r#"<entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/v2.0.2-Beta.4-tauri"/></entry><entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/v2.0.2-Beta.5-tauri"/></entry>"#
     }
     #[test]
     fn api_chooses_latest_published_release_with_a_matching_abi_pair() {
@@ -891,9 +891,9 @@ mod tests {
     #[test]
     fn legacy_release_mirror_urls_keep_exact_origin_and_repository_boundaries() {
         for raw in [
-            "https://fastgit.cc/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
-            "https://fastgit.cc/https://github.com/Open-Less/openless/releases/download/v2.0.2-Beta.6-tauri/OpenLess.apk",
-            "https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
+            "https://fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
+            "https://fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.6-tauri/OpenLess.apk",
+            "https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
         ] {
             let url = Url::parse(raw).unwrap();
             assert!(allowed_update_download_url(&url));
@@ -901,15 +901,15 @@ mod tests {
             assert!(allowed_request(&url, true));
         }
         for raw in [
-            "http://fastgit.cc/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
-            "https://fastgit.cc.attacker.invalid/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
-            "https://fastgit.cc@attacker.invalid/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
-            "https://user:password@fastgit.cc/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
-            "https://fastgit.cc:444/https://github.com/Open-Less/openless/releases/latest/download/OpenLess.apk",
+            "http://fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
+            "https://fastgit.cc.attacker.invalid/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
+            "https://fastgit.cc@attacker.invalid/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
+            "https://user:password@fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
+            "https://fastgit.cc:444/https://github.com/vip3310495-Johnny/openless/releases/latest/download/OpenLess.apk",
             "https://fastgit.cc/https://github.com/other/repo/releases/latest/download/OpenLess.apk",
-            "https://fastgit.cc/https://github.com/Open-Less/openless/releases-evil/download/OpenLess.apk",
-            "https://fastgit.cc/https://attacker.invalid/Open-Less/openless/releases/download/OpenLess.apk",
-            "https://fastgit.cc/https://github.com/Open-Less/openless/releases/../../other/private.apk",
+            "https://fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases-evil/download/OpenLess.apk",
+            "https://fastgit.cc/https://attacker.invalid/vip3310495-Johnny/openless/releases/download/OpenLess.apk",
+            "https://fastgit.cc/https://github.com/vip3310495-Johnny/openless/releases/../../other/private.apk",
         ] {
             let url = Url::parse(raw).unwrap();
             assert!(!allowed_update_download_url(&url));

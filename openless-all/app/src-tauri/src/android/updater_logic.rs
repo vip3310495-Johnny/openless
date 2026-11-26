@@ -2,7 +2,7 @@
 
 /// Must match `plugins.updater.pubkey` in `tauri.conf.json` (TAURI_SIGNING_PRIVATE_KEY pair).
 pub const UPDATER_PUBKEY_B64: &str =
-    "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFERUFBODAzNTY0QzMyM0YKUldRL01reFdBNmpxSGE1K0JadlpONXNWTzhJcGZCRGxjUVdIWExNNFJpeUNsSGZwazdlQThhemkK";
+    "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNBQzM3RTE5QzIzMjI3QzcKUldUSEp6TENHWDdET3JKNExSUDA2MXRSeXhHTkhXZmFpUjhEODdiSUZDV2VweEtXVUNrOUwvLysK";
 
 /// Returned when Kotlin `installApk` cannot open the system installer (e.g. missing install permission).
 pub const INSTALLER_NOT_OPENED_MSG: &str =
@@ -319,7 +319,7 @@ mod source_selection_tests {
     fn equal_precedence_prefers_github_metadata_without_mixing_builds() {
         let mut github = candidate("2.0.2-Beta.6+build.20261109-canonical", "github");
         github.url =
-            "https://github.com/Open-Less/openless/releases/download/v2.0.2-Beta.6-tauri/app.apk"
+            "https://github.com/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.6-tauri/app.apk"
                 .into();
         let cdn = candidate("2.0.2-Beta.6+build.99999999-stale", "cdn");
         let result = newest_candidates(vec![cdn.clone(), github.clone()]);

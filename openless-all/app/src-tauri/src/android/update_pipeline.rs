@@ -95,6 +95,8 @@ where
     Ok(bytes)
 }
 
+const TAIWAN_BUILD_GITHUB_ONLY: bool = true;
+
 async fn source_results(
     channel: UpdateChannel,
     arch: &str,
@@ -112,6 +114,11 @@ async fn source_results(
             )
         },
         async {
+            // Taiwan build: releases come only from the fork's GitHub releases. The project CDN
+            // serves official builds signed with a different key, which this build must not offer.
+            if TAIWAN_BUILD_GITHUB_ONLY {
+                return Err::<UpdateCandidate, String>("CDN disabled in the Taiwan build".to_string());
+            }
             tokio::time::timeout(Duration::from_secs(8), cdn_manifest(channel, arch))
                 .await
                 .map_err(|_| "CDN update check timed out".to_string())?

@@ -226,9 +226,9 @@ pub(crate) async fn github_manifest(channel: UpdateChannel) -> Result<serde_json
 #[cfg(not(mobile))]
 async fn github_api_manifest(channel: UpdateChannel) -> Result<serde_json::Value, String> {
     let endpoint = match channel {
-        UpdateChannel::Stable => "https://api.github.com/repos/Open-Less/openless/releases/latest",
+        UpdateChannel::Stable => "https://api.github.com/repos/vip3310495-Johnny/openless/releases/latest",
         UpdateChannel::Beta => {
-            "https://api.github.com/repos/Open-Less/openless/releases?per_page=30"
+            "https://api.github.com/repos/vip3310495-Johnny/openless/releases?per_page=30"
         }
     };
     let client = crate::net::http();
@@ -446,7 +446,7 @@ async fn github_web_manifest(channel: UpdateChannel) -> Result<serde_json::Value
             .await
             .map_err(|e| e.to_string())
     }
-    let feed = text("https://github.com/Open-Less/openless/releases.atom").await?;
+    let feed = text("https://github.com/vip3310495-Johnny/openless/releases.atom").await?;
     let tag =
         github_feed_tag(&feed, channel).ok_or("no published channel release in GitHub feed")?;
     let version = tag
@@ -455,7 +455,7 @@ async fn github_web_manifest(channel: UpdateChannel) -> Result<serde_json::Value
         .strip_suffix("-tauri")
         .unwrap();
     let assets = text(&format!(
-        "https://github.com/Open-Less/openless/releases/expanded_assets/{tag}"
+        "https://github.com/vip3310495-Johnny/openless/releases/expanded_assets/{tag}"
     ))
     .await?;
     let (artifact, signature) =
@@ -473,7 +473,7 @@ async fn github_web_manifest(channel: UpdateChannel) -> Result<serde_json::Value
     let version = github_signed_version(signature.trim(), version)?;
     Ok(
         serde_json::json!({"version": version, "url": artifact, "signature": signature.trim(),
-        "notes": format!("https://github.com/Open-Less/openless/releases/tag/{tag}")}),
+        "notes": format!("https://github.com/vip3310495-Johnny/openless/releases/tag/{tag}")}),
     )
 }
 
@@ -490,7 +490,7 @@ fn github_feed_tags(feed: &str, channel: UpdateChannel) -> Vec<&str> {
         .filter_map(|entry| {
             let entry = entry.split("</entry>").next()?;
             let tag = entry
-                .split("href=\"https://github.com/Open-Less/openless/releases/tag/")
+                .split("href=\"https://github.com/vip3310495-Johnny/openless/releases/tag/")
                 .nth(1)?
                 .split('"')
                 .next()?;
@@ -518,7 +518,7 @@ fn github_feed_tags(feed: &str, channel: UpdateChannel) -> Vec<&str> {
 
 #[cfg(not(mobile))]
 fn github_page_assets(page: &str, tag: &str, os: &str, arch: &str) -> Option<(String, String)> {
-    let prefix = format!("/Open-Less/openless/releases/download/{tag}/");
+    let prefix = format!("/vip3310495-Johnny/openless/releases/download/{tag}/");
     let paths: Vec<_> = page
         .split("href=\"")
         .skip(1)
@@ -556,11 +556,11 @@ mod public_release_tests {
     use super::*;
     #[test]
     fn feed_uses_semantic_channel_versions_and_canonical_repository_links() {
-        let feed = r#"<entry><link href="https://github.com/Open-Less/openless/releases/tag/v2.0.2-Beta.9-tauri"/></entry>
-        <entry><link href="https://github.com/Open-Less/openless/releases/tag/v2.0.2-Beta.10-tauri"/></entry>
-        <entry><link href="https://github.com/Open-Less/openless/releases/tag/v2.1.0-tauri"/></entry>
+        let feed = r#"<entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/v2.0.2-Beta.9-tauri"/></entry>
+        <entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/v2.0.2-Beta.10-tauri"/></entry>
+        <entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/v2.1.0-tauri"/></entry>
         <entry><link href="https://github.com/other/repo/releases/tag/v9.0.0-Beta.1-tauri"/></entry>
-        <entry><link href="https://github.com/Open-Less/openless/releases/tag/not-a-version-tauri"/></entry>"#;
+        <entry><link href="https://github.com/vip3310495-Johnny/openless/releases/tag/not-a-version-tauri"/></entry>"#;
         assert_eq!(
             github_feed_tag(feed, UpdateChannel::Beta),
             Some("v2.0.2-Beta.10-tauri")
@@ -572,10 +572,10 @@ mod public_release_tests {
     }
     #[test]
     fn web_assets_require_architecture_and_signature_in_the_same_release() {
-        let page = r#"<a href="/Open-Less/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_aarch64.app.tar.gz">
-        <a href="/Open-Less/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_aarch64.app.tar.gz.sig">
-        <a href="/Open-Less/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_2.0.2%2BBuild_x64-setup.exe">
-        <a href="/Open-Less/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_2.0.2%2BBuild_x64-setup.exe.sig">"#;
+        let page = r#"<a href="/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_aarch64.app.tar.gz">
+        <a href="/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_aarch64.app.tar.gz.sig">
+        <a href="/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_2.0.2%2BBuild_x64-setup.exe">
+        <a href="/vip3310495-Johnny/openless/releases/download/v2.0.2-Beta.4-tauri/OpenLess_2.0.2%2BBuild_x64-setup.exe.sig">"#;
         let tag = "v2.0.2-Beta.4-tauri";
         assert!(github_page_assets(page, tag, "macos", "aarch64")
             .unwrap()

@@ -34,7 +34,7 @@ fn parts(raw: &str, github: bool) -> Option<(String, String)> {
         if url.host_str()? != "github.com" {
             return None;
         }
-        "/Open-Less/openless/releases/download/"
+        "/vip3310495-Johnny/openless/releases/download/"
     } else {
         if url.host_str()? != "dl.aeoform.com" {
             return None;
@@ -52,7 +52,7 @@ fn parts(raw: &str, github: bool) -> Option<(String, String)> {
 pub(crate) fn github_fallback_for_cdn_artifact(raw: &str) -> Option<String> {
     let (tag, asset) = parts(raw, false)?;
     Some(format!(
-        "https://github.com/Open-Less/openless/releases/download/{}/{}",
+        "https://github.com/vip3310495-Johnny/openless/releases/download/{}/{}",
         encode(&tag),
         encode(&asset)
     ))
