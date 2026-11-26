@@ -20,15 +20,7 @@ internal object OpenLessRime {
         val shared = File(context.filesDir, "rime-shared-1.17.0-ice-da1fbe60-v1").apply { mkdirs() }
         val files = context.assets.list("rime") ?: error("Rime assets unavailable")
         require(files.isNotEmpty())
-        for (name in files) {
-            require(!name.contains('/') && !name.contains(".."))
-            val target = File(shared, name)
-            if (!target.exists()) {
-                val temporary = File(shared, "$name.tmp")
-                context.assets.open("rime/$name").use { input -> temporary.outputStream().use { input.copyTo(it) } }
-                check(temporary.renameTo(target))
-            }
-        }
+        copyAssets(context, "rime", shared)
         var selected = runCatching { JSONObject(OpenLessNative.nativePublicDictionary(shared.absolutePath, "select")).optString("data_path", shared.absolutePath) }
             .getOrDefault(shared.absolutePath)
         val profile = File(context.filesDir, "rime-user").absolutePath
@@ -49,8 +41,30 @@ internal object OpenLessRime {
         initialized = true
         refreshPublicDictionary(context)
     }
+    /**
+     * Copies missing files; subdirectories (opencc/ for the Taiwan glyph table) are copied too.
+     * AssetManager.list() returns children for a directory and an empty array for a file.
+     */
+    private fun copyAssets(context: Context, path: String, into: File) {
+        for (name in context.assets.list(path) ?: emptyArray()) {
+            require(!name.contains('/') && !name.contains(".."))
+            val child = "$path/$name"
+            val target = File(into, name)
+            if (!context.assets.list(child).isNullOrEmpty()) {
+                target.mkdirs()
+                copyAssets(context, child, target)
+            } else if (!target.exists()) {
+                val temporary = File(into, "$name.tmp")
+                context.assets.open(child).use { input -> temporary.outputStream().use { input.copyTo(it) } }
+                check(temporary.renameTo(target))
+            }
+        }
+    }
+
     private fun refreshPublicDictionary(context: Context) {
-        if (!context.getSharedPreferences("openless_ime_ui", Context.MODE_PRIVATE).getBoolean("public_dictionary_updates", true)) return
+        // Off by default in the Taiwan build: the public updates refresh the Simplified pinyin
+        // (rime-ice) tables only, and a snapshot directory would not carry the Zhuyin data.
+        if (!context.getSharedPreferences("openless_ime_ui", Context.MODE_PRIVATE).getBoolean("public_dictionary_updates", false)) return
         val now = System.currentTimeMillis()
         if (now < nextDictionaryCheck) return
         nextDictionaryCheck = now + java.util.concurrent.TimeUnit.DAYS.toMillis(1)

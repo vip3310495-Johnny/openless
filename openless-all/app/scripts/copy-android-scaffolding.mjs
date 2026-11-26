@@ -92,6 +92,7 @@ const KOTLIN_FILES = [
   'OpenLessLocalMigrationActivity.kt',
   'OpenLessProcessRestartStats.kt',
   'OpenLessBuildInfo.kt',
+  'GboardKeyboard.kt',
 ];
 
 const KOTLIN_TEST_FILES = [

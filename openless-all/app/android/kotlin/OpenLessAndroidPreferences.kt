@@ -97,7 +97,8 @@ object OpenLessAndroidPreferences {
     fun chineseScriptPreference(context: Context): String {
         return readPreferenceString(context, KEY_CHINESE_SCRIPT_PREFERENCE)
             ?.takeIf { it == "simplified" || it == "traditional" }
-            ?: "simplified"
+            // Taiwan build: Traditional Chinese unless the user picked Simplified.
+            ?: "traditional"
     }
 
     fun strokeAssociationEnabled(context: Context): Boolean =

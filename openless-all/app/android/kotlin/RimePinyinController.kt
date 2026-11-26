@@ -9,8 +9,14 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** The common Rime engine owns composition; the host owns target-editor writes. */
-internal class RimePinyinController(context: Context) {
+/**
+ * The common Rime engine owns composition; the host owns target-editor writes.
+ *
+ * [zhuyin] selects the Taiwan Zhuyin schemas: keys are Dachen key codes, Space types the first
+ * tone while a syllable is open and commits the converted sentence once it is complete (as on
+ * Gboard), Enter commits the sentence, and the Google pinyin cloud lookup never runs.
+ */
+internal class RimePinyinController(context: Context, private val zhuyin: Boolean = false) {
     private val context = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val worker = RimeTaskQueue.executor
@@ -19,6 +25,7 @@ internal class RimePinyinController(context: Context) {
     @Volatile private var requestId = 0L
     @Volatile private var learning = false
     @Volatile private var encoding = ""
+    @Volatile private var preview = ""
     @Volatile private var candidates: List<String> = emptyList()
     @Volatile private var cloudChoices: Set<String> = emptySet()
     @Volatile private var candidateRevision = 0L
@@ -32,6 +39,8 @@ internal class RimePinyinController(context: Context) {
     private var associationEpoch = 0L
     fun bindCommit(handler: (String) -> Boolean) { commit = handler }
     fun currentEncoding(): String = encoding
+    /** What committing now would insert: the converted text, with any unconverted keys left raw. */
+    fun currentPreview(): String = preview
     fun isEmpty(): Boolean = encoding.isEmpty()
     fun setLearningAllowed(allowed: Boolean) { learning = allowed; clear(); resetAssociationContext() }
     fun refresh(update: (List<String>) -> Unit) { submit("state", "", update) }
@@ -67,7 +76,8 @@ internal class RimePinyinController(context: Context) {
                 }
                 if (session.isEmpty()) {
                     sessionGeneration = OpenLessRime.sessionGeneration
-                    session = OpenLessRime.request("create", "", if (learning) "learning" else "private").getString("session")
+                    val kind = (if (zhuyin) "zhuyin_" else "") + (if (learning) "learning" else "private")
+                    session = OpenLessRime.request("create", "", kind).getString("session")
                 }
                 if (pending.isNotEmpty()) {
                     check(deliver(pending, epoch)) { "Editor write failed" }
@@ -81,8 +91,12 @@ internal class RimePinyinController(context: Context) {
                 // UI snapshots may lag behind fast typing or an in-flight commit.
                 var state = OpenLessRime.request("state", session)
                 val composing = state.optString("input").isNotEmpty()
+                // Zhuyin: a typed tone (or Space as 一聲) closes the last syllable.
+                val syllableClosed = zhuyin && state.optString("input").lastOrNull()?.let { it in " 6347" } == true
                 val nativeOperation = when (operation) {
-                    "backspace", "space", "confirmFirst" -> if (composing) "key" else "state"
+                    "space" -> if (!composing) "state" else if (syllableClosed) "confirm" else "key"
+                    "confirmFirst" -> if (!composing) "state" else if (zhuyin) "confirm" else "key"
+                    "backspace" -> if (composing) "key" else "state"
                     "literal" -> if (argument == "'" && composing) "key" else "confirm"
                     else -> operation
                 }
@@ -111,11 +125,12 @@ internal class RimePinyinController(context: Context) {
                 if (epoch != generation || revision != requestId) return@execute
                 state = OpenLessRime.request("candidates", session)
                 val input = state.optString("input")
+                val shown = state.optString("preview")
                 val rows = state.optJSONArray("candidates")
                 val result = if (rows == null) emptyList() else (0 until rows.length()).map { rows.getString(it) }
                 main.post {
                     if (epoch != generation || revision != requestId) return@post
-                    encoding = input; candidates = result; cloudChoices = emptySet()
+                    encoding = input; preview = if (input.isEmpty()) "" else shown; candidates = result; cloudChoices = emptySet()
                     candidateRevision = state.optLong("revision"); update(result)
                     scheduleCloud(input, result, epoch, revision, update)
                 }
@@ -130,6 +145,7 @@ internal class RimePinyinController(context: Context) {
                     main.post {
                         if (epoch == generation && revision == requestId) {
                             encoding = state.optString("input"); candidates = result
+                            preview = if (encoding.isEmpty()) "" else state.optString("preview")
                             candidateRevision = state.optLong("revision"); update(result)
                         }
                     }
@@ -157,7 +173,7 @@ internal class RimePinyinController(context: Context) {
     }
     fun insertLiteral(text: String, update: (List<String>) -> Unit) { submit("literal", text, update) }
     fun clear() {
-        generation++; requestId++; encoding = ""; candidates = emptyList(); cloudChoices = emptySet()
+        generation++; requestId++; encoding = ""; preview = ""; candidates = emptyList(); cloudChoices = emptySet()
         worker.execute {
             try { if (session.isNotEmpty()) OpenLessRime.request("destroy", session) }
             catch (_: Throwable) {} finally { session = ""; pending = ""; pendingLiteral = "" }
@@ -165,7 +181,7 @@ internal class RimePinyinController(context: Context) {
     }
     // The input queue also belongs to other controllers and dictionary maintenance.
     fun shutdown() { clear(); cloudWorker.shutdownNow() }
-    private fun cloudEnabled(): Boolean = learning && context.getSharedPreferences("openless_ime_ui", Context.MODE_PRIVATE)
+    private fun cloudEnabled(): Boolean = !zhuyin && learning && context.getSharedPreferences("openless_ime_ui", Context.MODE_PRIVATE)
         .getBoolean("cloud_pinyin_enabled", false)
 
     private fun scheduleCloud(input: String, local: List<String>, epoch: Long, revision: Long, update: (List<String>) -> Unit) {

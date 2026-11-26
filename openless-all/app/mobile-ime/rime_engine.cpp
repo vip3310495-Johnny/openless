@@ -16,6 +16,16 @@ void rime_require_module_levers();  // C++ linkage, as RIME_REGISTER_MODULE defi
 
 namespace {
 const char* const kPinyinSchemas[] = {"openless_pinyin_private", "openless_pinyin_learning"};
+// Taiwan Zhuyin (rime-bopomofo on Terra Pinyin). Deployed with the pinyin schemas; the user
+// dictionary lives in terra_pinyin.userdb, apart from the pinyin one.
+const char* const kZhuyinSchemas[] = {"openless_zhuyin_private", "openless_zhuyin_learning"};
+const char* schema_for(const std::string& kind) {
+    if (kind == "learning") return "openless_pinyin_learning";
+    if (kind == "private") return "openless_pinyin_private";
+    if (kind == "zhuyin_learning") return "openless_zhuyin_learning";
+    if (kind == "zhuyin_private") return "openless_zhuyin_private";
+    throw std::runtime_error("Unknown Rime schema kind");
+}
 const char* const kUserDict = "pinyin_simp";
 std::mutex mutex;
 RimeApi* api = nullptr;
@@ -47,6 +57,7 @@ std::string snapshot(RimeSessionId id, bool expanded = false, int offset = 0, in
         ",\"commit\":" + quote(session.pending) +
         ",\"input\":" + quote(api->get_input(id) ? api->get_input(id) : "") +
         ",\"preedit\":" + quote(context.composition.preedit ? context.composition.preedit : "") +
+        ",\"preview\":" + quote(context.commit_text_preview ? context.commit_text_preview : "") +
         ",\"page\":" + std::to_string(context.menu.page_no) +
         ",\"hasNext\":" + (context.menu.is_last_page ? "false" : "true") + ",\"candidates\":[";
     bool more = !context.menu.is_last_page;
@@ -79,6 +90,11 @@ void deploy_pinyin_schemas(RimeApi* target) {
     for (const auto* name : kPinyinSchemas) {
         const auto schema = shared_dir + "/" + name + ".schema.yaml";
         if (!target->deploy_schema(schema.c_str())) throw std::runtime_error("Rime schema deployment failed");
+    }
+    // Zhuyin is optional data: a profile without it (an older public snapshot) keeps pinyin working.
+    for (const auto* name : kZhuyinSchemas) {
+        const auto schema = shared_dir + "/" + name + ".schema.yaml";
+        if (std::filesystem::exists(schema)) target->deploy_schema(schema.c_str());
     }
 }
 // Destroying a session commits its user dictionary transaction and releases
@@ -130,6 +146,10 @@ std::string request(const std::string& op, const std::string& handle, const std:
             std::error_code ignored;
             std::filesystem::remove(user_dir + "/build/" + name + ".schema.yaml", ignored);
         }
+        for (const auto* name : kZhuyinSchemas) {
+            std::error_code ignored;
+            std::filesystem::remove(user_dir + "/build/" + name + ".schema.yaml", ignored);
+        }
         deploy_pinyin_schemas(api);
         return "{\"ok\":true}";
     }
@@ -156,14 +176,15 @@ std::string request(const std::string& op, const std::string& handle, const std:
     if (op == "create") {
         auto id = api->create_session();
         if (!id) throw std::runtime_error("Rime session creation failed");
-        if (!api->select_schema(id, arg == "learning" ? "openless_pinyin_learning" : "openless_pinyin_private")) {
+        const auto* schema = schema_for(arg.empty() ? std::string("private") : arg);
+        if (!api->select_schema(id, schema)) {
             api->destroy_session(id);
-            throw std::runtime_error("Rime pinyin_simp schema unavailable");
+            throw std::runtime_error(std::string("Rime schema unavailable: ") + schema);
         }
         api->set_option(id, "ascii_mode", False);
         // Sessions with learning disabled must not update the user dictionary.
         Session session;
-        session.learning = arg == "learning";
+        session.learning = arg == "learning" || arg == "zhuyin_learning";
         sessions.emplace(id, session);
         return snapshot(id);
     }

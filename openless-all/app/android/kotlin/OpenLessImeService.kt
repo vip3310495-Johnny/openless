@@ -68,6 +68,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
             put("raw", rawModeArmed)
             put("quickNote", quickNoteArmed)
             put("cloud", cloudNoteArmed)
+            if (action == "start") put("translation", translationArmed)
             // Core builds the prompt envelope; only the session's "start" carries the snapshot.
             if (action == "start" && cursorContext != null) {
                 cursorContext.packageName?.let { put("frontApp", it) }
@@ -254,6 +255,16 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
     // is ENGLISH, and "英文" while it's PINYIN.
     private var latinInputMode = LatinInputMode.ENGLISH
     private val rimePinyinController by lazy { RimePinyinController(this) }
+    // Taiwan build: Gboard-style Zhuyin/English keyboard (GboardKeyboard.kt) replaces the English panel.
+    private val gboardLazy = lazy { GboardKeyboard(this) }
+    private val gboard by gboardLazy
+    /** Voice was started from the Gboard toolbar: return to the keyboard once the text is in. */
+    private var voiceFromKeyboard = false
+    /** The next dictation should be translated to the configured target language. */
+    private var translationArmed = false
+    private fun gboardEnabled(): Boolean =
+        getSharedPreferences("openless_ime_ui", MODE_PRIVATE).getBoolean("gboard_layout", true)
+    private fun gboardActive(): Boolean = inputMode == InputMode.ENGLISH && gboardEnabled()
     // The word currently being typed on the English keyboard — appended to
     // per letter, trimmed per backspace, cleared at every word boundary
     // (space/return/punctuation/candidate tap/mode or panel switch). Never
@@ -534,7 +545,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
     }
 
     private fun restoreInputMode() {
-        inputMode = when (getSharedPreferences("openless_ime_ui", MODE_PRIVATE).getString("input_mode", "voice")) {
+        inputMode = when (getSharedPreferences("openless_ime_ui", MODE_PRIVATE).getString("input_mode", "english")) {
             "stroke" -> InputMode.STROKE
             "clipboard" -> InputMode.CLIPBOARD
             "english" -> InputMode.ENGLISH
@@ -656,6 +667,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         strokeController.shutdown()
         if (englishCandidateProviderLazy.isInitialized()) englishCandidateProviderLazy.value.shutdown()
         rimePinyinController.shutdown()
+        if (gboardLazy.isInitialized()) gboard.shutdown()
         // Marks this as a clean end-of-session for
         // OpenLessApplication.recordUncleanShutdownIfAny() — an abrupt
         // process kill (native crash, OOM) never reaches this line, which
@@ -709,6 +721,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         refreshLanguage()
         startRuntimeService()
         val content = when {
+            gboardActive() -> gboard.buildView(isDarkTheme, keyboardPanelHeightPx())
             inputMode == InputMode.ENGLISH -> wrapWithKeyPreviewOverlay(buildKeyboardView())
             inputMode == InputMode.STROKE -> wrapWithKeyPreviewOverlay(
                 if (strokeController.strokeNumberMode) strokeController.buildStrokeNumberView()
@@ -1665,6 +1678,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
      * rebuilds the input view anyway.
      */
     private fun updateAutoShift(refresh: Boolean = true) {
+        if (gboardActive()) return
         if (shiftState == ShiftState.CAPS_LOCK || (shiftState == ShiftState.SHIFT_ONCE && !autoShift)) return
         val applies = inputMode == InputMode.ENGLISH &&
             latinInputMode == LatinInputMode.ENGLISH &&
@@ -2934,6 +2948,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
      * every capital. Falls back to a rebuild when that panel isn't on screen.
      */
     private fun applyShiftState() {
+        if (gboardActive()) return
         val keys = englishLetterKeys.filter { it.first.isAttachedToWindow }
         val shiftKey = englishShiftKey?.takeIf { it.isAttachedToWindow }
         if (keys.isEmpty() || shiftKey == null) {
@@ -3511,6 +3526,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
             inputMode = InputMode.ENGLISH
             latinInputMode = LatinInputMode.ENGLISH
         }
+        gboard.onStartInput(attribute)
         renderEnglishCandidates(emptyList())
         startRuntimeService()
         sessionEpoch++
@@ -3542,6 +3558,8 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         if (rebuild) {
             appliedKeyboardFootprintKey = key
             refreshInputView()
+        } else if (gboardActive()) {
+            gboard.onStartInputView(info)
         } else if (inputMode == InputMode.ENGLISH && englishLayer == EnglishLayer.LETTERS) {
             applyShiftState()
         }
@@ -3582,6 +3600,9 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         englishComposingWord.clear()
         rimePinyinController.clear()
         rimePinyinController.resetAssociationContext()
+        if (gboardLazy.isInitialized()) gboard.onFinishInput()
+        voiceFromKeyboard = false
+        translationArmed = false
         strokeController.resetForNewInputSession()
         if (recording) {
             cancelImeSession()
@@ -3621,6 +3642,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         if (draftEdit == null) invalidateEnglishAutoTextSelection(newSelStart, newSelEnd)
+        if (draftEdit == null && gboardActive()) gboard.onUpdateSelection(newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         // Selecting another span must not discard the user's pending undo/redo.
         if (newSelStart < 0 || newSelStart != newSelEnd) return
         invalidateDictationResultIfTextChanged()
@@ -3645,7 +3667,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         if (before.isNotEmpty() || after.isNotEmpty()) return
         strokeController.clearAfterFieldEmptied()
         rimePinyinController.resetAssociationContext()
-        if (inputMode != InputMode.ENGLISH) return
+        if (inputMode != InputMode.ENGLISH || gboardActive()) return
         if (latinInputMode == LatinInputMode.PINYIN) {
             if (rimePinyinController.isEmpty()) renderPinyinAssociations(emptyList())
         } else if (englishComposingWord.isNotEmpty()) {
@@ -3722,10 +3744,16 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
             imeRequestId = nextImeRequest.incrementAndGet()
             pendingImeStop = false
             if (!sendImeCommand("start", captureCursorContext())) { recording = false; processing = false }
+            translationArmed = false
         }
     }
 
     private fun cancelDictation() {
+        translationArmed = false
+        if (voiceFromKeyboard && inputMode == InputMode.VOICE) {
+            voiceFromKeyboard = false
+            Handler(Looper.getMainLooper()).post { if (inputMode == InputMode.VOICE) selectInputMode(InputMode.ENGLISH) }
+        }
         recording = false
         processing = false
         rawModeArmed = false
@@ -4574,7 +4602,42 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
         lastDictationEpoch = sessionEpoch
         dictationTextUndone = false
         setState("done", "已上屏")
+        returnToKeyboardAfterVoice(900L)
     }
+
+    private fun returnToKeyboardAfterVoice(delayMs: Long) {
+        if (!voiceFromKeyboard) return
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (voiceFromKeyboard && inputMode == InputMode.VOICE && !recording && !processing && draftEdit == null) {
+                voiceFromKeyboard = false
+                selectInputMode(InputMode.ENGLISH)
+            }
+        }, delayMs)
+    }
+
+    /** Gboard toolbar mic: open the voice panel and start listening right away. */
+    internal fun startVoiceFromKeyboard(translate: Boolean) {
+        if (isSensitiveField(currentInputEditorInfo)) return
+        voiceFromKeyboard = true
+        translationArmed = translate
+        selectInputMode(InputMode.VOICE)
+        // The next field should still open on the keyboard.
+        saveInputMode(InputMode.ENGLISH)
+        Handler(Looper.getMainLooper()).post {
+            if (inputMode == InputMode.VOICE && !recording && !processing) toggleDictation()
+            if (!recording) translationArmed = false
+        }
+    }
+
+    /** Gboard toolbar clipboard: the history list, without making it the panel the next field opens with. */
+    internal fun openClipboardFromKeyboard() {
+        voiceFromKeyboard = false
+        inputMode = InputMode.CLIPBOARD
+        clipboardHistoryMode = true
+        refreshInputView()
+    }
+
+    internal fun openSettingsFromKeyboard() = openSettings()
 
     private fun flatCircleButton(icon: String, sizeDp: Int, description: String, action: () -> Unit): TextView {
         return TextView(this).apply {
@@ -5337,7 +5400,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
             paint.color = colorFor(2)
             drawCursorBrackets(canvas, segmentWidth * 2.5f, centerY, h)
             textPaint.color = colorFor(3)
-            drawLabel(canvas, "EN", segmentWidth * 3.5f, centerY, h * 0.28f)
+            drawLabel(canvas, "鍵盤", segmentWidth * 3.5f, centerY, h * 0.30f)
         }
 
         /** Five bars — short, mid, tall, mid, short. */
@@ -6408,7 +6471,7 @@ class OpenLessImeService : InputMethodService(), OpenLessOverlayBridge.OverlaySt
     companion object {
         private val nextImeRequest = java.util.concurrent.atomic.AtomicLong()
         const val PREF_KEYBOARD_HEIGHT_DP = "keyboard_height_dp"
-        const val DEFAULT_KEYBOARD_HEIGHT_DP = 300
+        const val DEFAULT_KEYBOARD_HEIGHT_DP = 276
         const val MIN_KEYBOARD_HEIGHT_DP = 220
         const val MAX_KEYBOARD_HEIGHT_DP = 420
         const val PREF_KEYBOARD_RAISE_DP = "keyboard_raise_dp"

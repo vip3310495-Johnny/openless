@@ -22,6 +22,9 @@ SOURCES = {
     'ice': ('iDvel/rime-ice', 'da1fbe602e38f26db846fa10120ee64c2b0324c0'),
     'essay': ('rime/rime-essay', '054920de4f54c9e5994276a96a4fc2a35cb51aa3'),
     'prelude': ('rime/rime-prelude', '082425ea0684bca36474415d4a0e8db9b016487e'),
+    # Taiwan Zhuyin (bopomofo, Dachen layout) on the Terra Pinyin traditional-character dictionary.
+    'bopomofo': ('rime/rime-bopomofo', '6085c9a38a4a728047862b33d67eee18aa86f3b9'),
+    'terra': ('rime/rime-terra-pinyin', '723e51bc266cf9464530c1ddedb856aa18e3da34'),
 }
 
 REQUIRED_FILES = {
@@ -33,6 +36,8 @@ REQUIRED_FILES = {
     'ice-da1fbe602e38f26db846fa10120ee64c2b0324c0': ('rime_ice.dict.yaml', 'rime_ice.schema.yaml'),
     'essay-054920de4f54c9e5994276a96a4fc2a35cb51aa3': ('essay.txt', 'AUTHORS'),
     'prelude-082425ea0684bca36474415d4a0e8db9b016487e': ('default.yaml',),
+    'bopomofo-6085c9a38a4a728047862b33d67eee18aa86f3b9': ('bopomofo.schema.yaml', 'zhuyin.yaml'),
+    'terra-723e51bc266cf9464530c1ddedb856aa18e3da34': ('terra_pinyin.dict.yaml',),
     'boost-1.85.0': ('boost/core/detail/sp_thread_sleep.hpp',),
 }
 
@@ -83,6 +88,53 @@ def fetch(name, url):
         archive.unlink(missing_ok=True)
         return fetch(name, url)
     return dest
+
+ZHUYIN_SCHEMA = '''# OpenLess Taiwan Zhuyin schema, derived from rime-bopomofo bopomofo_tw (LGPL-3.0).
+__include: bopomofo.schema:/
+__patch:
+  - switches/@2/reset: 3
+schema:
+  schema_id: {schema_id}
+  name: 注音
+speller:
+  algebra:
+    __patch:
+      - zhuyin:/pinyin_to_zhuyin
+      - zhuyin:/abbreviation
+      - zhuyin:/keymap_bopomofo
+translator:
+  prism: openless_zhuyin
+{translator}'''
+
+def stage_zhuyin(src, data):
+    """Taiwan Zhuyin: upstream rime-bopomofo on Terra Pinyin, Taiwan glyph forms via OpenCC t2tw.
+
+    The keyboard sends Dachen keys (1qaz2wsx...) like a physical Zhuyin keyboard, so the upstream
+    spelling algebra is used unchanged; only the free typing order is dropped, as bopomofo_tw does.
+    The learning schema keeps Rime's own user dictionary (selection frequency and new phrases);
+    the private one, for password and incognito fields, neither reads nor writes it.
+    """
+    for name in ['bopomofo.schema.yaml', 'zhuyin.yaml']:
+        shutil.copy2(src['bopomofo'] / name, data / name)
+    shutil.copy2(src['bopomofo'] / 'LICENSE', data / 'rime-bopomofo-LICENSE')
+    shutil.copy2(src['terra'] / 'terra_pinyin.dict.yaml', data / 'terra_pinyin.dict.yaml')
+    shutil.copy2(src['terra'] / 'LICENSE', data / 'rime-terra-pinyin-LICENSE')
+    learning = '  enable_user_dict: true\n  user_dict: terra_pinyin\n  enable_sentence: true\n'
+    private = '  enable_user_dict: false\n  enable_sentence: true\n'
+    for schema_id, translator in [('openless_zhuyin_learning', learning), ('openless_zhuyin_private', private)]:
+        (data / (schema_id + '.schema.yaml')).write_text(
+            ZHUYIN_SCHEMA.format(schema_id=schema_id, translator=translator), encoding='utf-8')
+    # Rime looks for OpenCC configs in <shared data>/opencc/. Text dictionaries avoid compiling
+    # .ocd2 files on the build host; the table is small enough to load on first use.
+    opencc = data / 'opencc'
+    opencc.mkdir(exist_ok=True)
+    shutil.copy2(src['opencc'] / 'data/dictionary/TWVariants.txt', opencc / 'TWVariants.txt')
+    config = {
+        'name': 'Traditional Chinese to Taiwan Standard',
+        'segmentation': {'type': 'mmseg', 'dict': {'type': 'text', 'file': 'TWVariants.txt'}},
+        'conversion_chain': [{'dict': {'type': 'text', 'file': 'TWVariants.txt'}}],
+    }
+    (opencc / 't2tw.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 def run(*args):
     subprocess.run([str(x) for x in args], check=True)
@@ -216,6 +268,7 @@ def main():
     private = base_schema.replace('schema_id: pinyin_simp', 'schema_id: openless_pinyin_private')
     private = private.replace('\ntranslator:\n', '\ntranslator:\n  enable_user_dict: false\n  contextual_suggestions: false\n')
     (data / 'openless_pinyin_private.schema.yaml').write_text(private)
+    stage_zhuyin(src, data)
     (data / 'manifest.json').write_text(json.dumps([p.name for p in data.iterdir() if p.is_file() and p.name != 'manifest.json']))
     shutil.copy2(APP / 'third_party/rime-stroke/LICENSE', data / 'stroke-LICENSE')
     shutil.copy2(src['rime'] / 'LICENSE', data / 'librime-LICENSE')

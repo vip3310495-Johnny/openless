@@ -58,7 +58,7 @@ internal object KeyboardDataFile {
         },
         bool("debugFeaturesEnabled", "key_debug_features_enabled", false),
         bool("cloudPinyinEnabled", "cloud_pinyin_enabled", false),
-        bool("publicDictionaryUpdates", "public_dictionary_updates", true),
+        bool("publicDictionaryUpdates", "public_dictionary_updates", false),
         bool("englishSuggestionsEnabled", "english_suggestions_enabled", true),
         Setting("fuzzyPinyin", "pinyin_fuzzy_groups", { value ->
             value is List<*> && value.all { id -> RimeFuzzyPinyin.groups.any { it.id == id } }

@@ -671,6 +671,9 @@ struct ImeCommand {
     quick_note: bool,
     #[serde(default)]
     cloud: bool,
+    // Taiwan build: the keyboard asks for this dictation to be translated (start only).
+    #[serde(default)]
+    translation: bool,
     // Sent with "start" only: the editor's package and the text around the caret,
     // snapshotted by the IME when recording begins.
     #[serde(default)]
@@ -742,6 +745,7 @@ fn ime_command(json: &str) -> Result<(), String> {
                         },
                         front_app: command.front_app.clone(),
                         cursor_context,
+                        translation_requested: command.translation,
                         ..Default::default()
                     }));
                 // The first poll reserves the Core session before any async preparation.
