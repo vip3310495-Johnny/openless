@@ -234,7 +234,7 @@ def main():
     # The bundled stroke dictionary is already attributed by this repository.
     shutil.copy2(APP / 'third_party/rime-stroke/stroke.dict.yaml', data / 'stroke.dict.yaml')
     (data / 'stroke.schema.yaml').write_text('schema:\n  schema_id: stroke\n  name: 笔画\nengine:\n  translators: [table_translator]\ntranslator:\n  dictionary: stroke\n', encoding='utf-8')
-    (data / 'default.custom.yaml').write_text('patch:\n  schema_list:\n    - schema: pinyin_simp\n  menu/page_size: 8\n', encoding='utf-8')
+    (data / 'default.custom.yaml').write_text('patch:\n  schema_list:\n    - schema: openless_zhuyin_learning\n  menu/page_size: 8\n', encoding='utf-8')
     # Native Rime dictionary/spelling from upstream Ice. Lua utility processors
     # are not required for its dictionaries and are intentionally not advertised.
     ice = src['ice']

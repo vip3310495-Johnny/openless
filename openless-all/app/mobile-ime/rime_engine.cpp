@@ -86,16 +86,28 @@ std::string snapshot(RimeSessionId id, bool expanded = false, int offset = 0, in
     api->free_context(&context);
     return out;
 }
+bool pinyin_deployed = false;
 void deploy_pinyin_schemas(RimeApi* target) {
     for (const auto* name : kPinyinSchemas) {
         const auto schema = shared_dir + "/" + name + ".schema.yaml";
         if (!target->deploy_schema(schema.c_str())) throw std::runtime_error("Rime schema deployment failed");
     }
-    // Zhuyin is optional data: a profile without it (an older public snapshot) keeps pinyin working.
+    pinyin_deployed = true;
+}
+// Returns false when the data has no Zhuyin schemas (another platform's data, an older snapshot).
+bool deploy_zhuyin_schemas(RimeApi* target) {
+    bool found = false;
     for (const auto* name : kZhuyinSchemas) {
         const auto schema = shared_dir + "/" + name + ".schema.yaml";
-        if (std::filesystem::exists(schema)) target->deploy_schema(schema.c_str());
+        if (!std::filesystem::exists(schema)) continue;
+        found = true;
+        if (!target->deploy_schema(schema.c_str())) throw std::runtime_error("Rime Zhuyin schema deployment failed");
     }
+    return found;
+}
+// Taiwan build: the large Simplified pinyin dictionaries compile on first pinyin use, not at startup.
+void deploy_startup_schemas(RimeApi* target) {
+    if (!deploy_zhuyin_schemas(target)) deploy_pinyin_schemas(target);
 }
 // Destroying a session commits its user dictionary transaction and releases
 // the database lock, which the user dictionary manager needs to open it.
@@ -126,7 +138,7 @@ std::string request(const std::string& op, const std::string& handle, const std:
         candidate->setup(&traits);
         candidate->initialize(&traits);
         if (candidate->start_maintenance(True)) candidate->join_maintenance_thread();
-        try { deploy_pinyin_schemas(candidate); }
+        try { deploy_startup_schemas(candidate); }
         catch (...) { candidate->finalize(); throw; }
         // On a fresh profile the first installation_update only writes
         // installation.yaml and leaves the sync dir as the relative "sync"
@@ -150,6 +162,7 @@ std::string request(const std::string& op, const std::string& handle, const std:
             std::error_code ignored;
             std::filesystem::remove(user_dir + "/build/" + name + ".schema.yaml", ignored);
         }
+        deploy_zhuyin_schemas(api);
         deploy_pinyin_schemas(api);
         return "{\"ok\":true}";
     }
@@ -177,6 +190,7 @@ std::string request(const std::string& op, const std::string& handle, const std:
         auto id = api->create_session();
         if (!id) throw std::runtime_error("Rime session creation failed");
         const auto* schema = schema_for(arg.empty() ? std::string("private") : arg);
+        if (arg.rfind("zhuyin_", 0) != 0 && !pinyin_deployed) deploy_pinyin_schemas(api);
         if (!api->select_schema(id, schema)) {
             api->destroy_session(id);
             throw std::runtime_error(std::string("Rime schema unavailable: ") + schema);
